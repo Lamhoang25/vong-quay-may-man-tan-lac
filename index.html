@@ -16,7 +16,7 @@ canvas{width:100%;height:100%}.ptr{position:absolute;top:-6px;left:50%;transform
 <label>Làng đang ở</label><input id="village" placeholder="Làng ..."><button id="go">Tiếp tục ➜</button><div class="err" id="err1"></div></div>
 <div class="card hide" id="spin"><div class="wheelbox"><div class="ptr"></div><canvas id="c" width="600" height="600"></canvas></div>
 <button id="spinbtn">QUAY NGAY!</button><div class="err" id="err2"></div></div>
-<div class="card hide res" id="result"><div>🎉 Chúc mừng! 🎉</div><div class="prize" id="rPrize"></div>
+<div class="card hide res" id="result"><div id="rHead">🎉 Chúc mừng! 🎉</div><div class="prize" id="rPrize"></div>
 <table><tr><td>Họ tên</td><td id="rName"></td></tr><tr><td>Số điện thoại</td><td id="rPhone"></td></tr><tr><td>Làng</td><td id="rVillage"></td></tr>
 <tr><td>Vòng</td><td id="rRound"></td></tr><tr><td>Thời gian</td><td id="rTime"></td></tr></table>
 <div class="note">📸 Hãy chụp màn hình này và gửi cho shop để nhận quà!</div><div class="err" id="rMsg"></div></div></div>
@@ -29,7 +29,7 @@ let t=s.name.length>18?s.name.slice(0,17)+'…':s.name;ctx.fillText(t,270,0);ctx
 ctx.beginPath();ctx.arc(0,0,36,0,7);ctx.fillStyle='#fff';ctx.fill();ctx.restore();}
 const key=()=>'vq_'+cfg.round.id;
 function showResult(r,msg){$('form').classList.add('hide');$('spin').classList.add('hide');$('result').classList.remove('hide');
-$('rPrize').textContent=r.prize;$('rName').textContent=r.name;$('rPhone').textContent=r.phone;$('rVillage').textContent=r.village;$('rRound').textContent=r.roundLabel;
+const lose=r.win===false||/may mắn lần sau|không trúng/i.test(r.prize);$('rHead').textContent=lose?'🍀 Cảm ơn bạn đã tham gia!':'🎉 Chúc mừng! 🎉';$('rPrize').textContent=r.prize;document.querySelector('.note').textContent=lose?'Chúc bạn may mắn lần sau! Hãy mời thêm bạn bè vào nhóm nhé.':'📸 Hãy chụp màn hình này và gửi cho shop để nhận quà!';$('rName').textContent=r.name;$('rPhone').textContent=r.phone;$('rVillage').textContent=r.village;$('rRound').textContent=r.roundLabel;
 $('rTime').textContent=new Date(r.time).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});$('rMsg').textContent=msg||'';}
 fetch('/api/config').then(r=>r.json()).then(c=>{cfg=c;$('round').textContent=c.round.label+(c.round.open?'':' — ĐÃ ĐÓNG');draw();
 if(!c.round.open){$('go').disabled=true;$('err1').textContent='Vòng quay hiện đang đóng. Hẹn bạn lần sau!';}

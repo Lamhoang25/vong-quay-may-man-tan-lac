@@ -1,4 +1,4 @@
-# 🎡 Vòng Quay May Mắn
+# 🎡 Vòng Quay May Mắn - Tân Lạc
 
 Trò chơi vòng quay may mắn cho khách hàng trong nhóm Zalo. Node.js + Express, dữ liệu lưu trong file `data.json` (tự tạo).
 
@@ -20,6 +20,20 @@ npm start            # http://localhost:3000
 6. Xem thống kê, danh sách trúng thưởng, **Tải CSV** (mở được bằng Excel).
 
 Kết quả do **máy chủ** chọn theo trọng số, khách không thể gian lận bằng trình duyệt.
+
+
+## Lưu dữ liệu bền vững bằng MongoDB (khuyên dùng trên Render miễn phí)
+Ổ đĩa của Render miễn phí bị xóa mỗi lần khởi động lại, nên hãy dùng MongoDB Atlas miễn phí (gói M0):
+1. Tạo cluster M0 tại mongodb.com/atlas → Database Access: tạo user/mật khẩu → Network Access: thêm `0.0.0.0/0`.
+2. Bấm Connect → Drivers → sao chép chuỗi kết nối dạng `mongodb+srv://user:matkhau@cluster0.xxxxx.mongodb.net/`.
+3. Trên Render → Environment → thêm biến **`MONGODB_URI`** = chuỗi trên (và `ADMIN_PASSWORD`).
+4. Deploy lại. Trang quản trị sẽ hiện "Lưu trữ: MongoDB (bền vững)".
+
+Khi có `MONGODB_URI`, mọi dữ liệu (cấu hình các ô do admin lưu, các vòng/tuần, người chơi) nằm trong database `vongquay`
+(collections `config`, `rounds`, `spins`; chỉ mục duy nhất roundId+phone đảm bảo mỗi SĐT chỉ quay 1 lần/vòng).
+Không có `MONGODB_URI` → dùng file `data.json` như cũ.
+
+Ô "Không trúng": tick ô này trong trang quản trị (hoặc đặt tên chứa "may mắn lần sau") để màn hình kết quả không hiện "Chúc mừng!".
 
 ## Đưa lên mạng miễn phí (để có link gửi Zalo)
 **Render.com** (dễ nhất): đưa code lên GitHub → Render → New → Web Service → chọn repo → Build: `npm install`, Start: `npm start` → thêm biến môi trường `ADMIN_PASSWORD`. Bạn sẽ có link dạng `https://ten-app.onrender.com`.
