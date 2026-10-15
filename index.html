@@ -1,0 +1,51 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vòng Quay May Mắn - Tân Lạc</title><style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Arial,sans-serif;background:linear-gradient(160deg,#ff5f6d,#ffc371);min-height:100vh;color:#222}
+.wrap{max-width:440px;margin:0 auto;padding:16px}h1{color:#fff;text-align:center;text-shadow:0 2px 4px #0005;margin:8px 0 2px;font-size:28px}
+.sub{color:#fff;text-align:center;margin:0 0 14px;font-weight:600}.card{background:#fff;border-radius:18px;padding:18px;box-shadow:0 6px 20px #0003}
+label{display:block;font-weight:600;margin:10px 0 4px}input{width:100%;padding:12px;font-size:16px;border:2px solid #ddd;border-radius:10px}
+button{width:100%;padding:14px;margin-top:16px;font-size:18px;font-weight:700;border:0;border-radius:12px;background:#e63946;color:#fff}button:disabled{opacity:.5}
+.err{color:#c00;margin-top:10px;font-weight:600;min-height:1em}.hide{display:none}.wheelbox{position:relative;width:100%;aspect-ratio:1}
+canvas{width:100%;height:100%}.ptr{position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-top:32px solid #222;z-index:2}
+.res{text-align:center}.res .prize{font-size:26px;font-weight:800;color:#e63946;margin:10px 0;padding:12px;border:3px dashed #e63946;border-radius:12px}
+.res table{width:100%;text-align:left;border-collapse:collapse}.res td{padding:7px 4px;border-bottom:1px solid #eee}.res td:first-child{color:#666;width:42%}
+.note{margin-top:12px;background:#fff3cd;padding:10px;border-radius:10px;font-weight:600}
+</style></head><body><div class="wrap"><h1>🎡 Vòng Quay May Mắn - Tân Lạc</h1><p class="sub" id="round"></p>
+<div class="card" id="form"><label>Họ và tên</label><input id="name" autocomplete="name" placeholder="Nguyễn Văn A">
+<label>Số điện thoại</label><input id="phone" type="tel" inputmode="tel" placeholder="0912345678">
+<label>Làng đang ở</label><input id="village" placeholder="Làng ..."><button id="go">Tiếp tục ➜</button><div class="err" id="err1"></div></div>
+<div class="card hide" id="spin"><div class="wheelbox"><div class="ptr"></div><canvas id="c" width="600" height="600"></canvas></div>
+<button id="spinbtn">QUAY NGAY!</button><div class="err" id="err2"></div></div>
+<div class="card hide res" id="result"><div>🎉 Chúc mừng! 🎉</div><div class="prize" id="rPrize"></div>
+<table><tr><td>Họ tên</td><td id="rName"></td></tr><tr><td>Số điện thoại</td><td id="rPhone"></td></tr><tr><td>Làng</td><td id="rVillage"></td></tr>
+<tr><td>Vòng</td><td id="rRound"></td></tr><tr><td>Thời gian</td><td id="rTime"></td></tr></table>
+<div class="note">📸 Hãy chụp màn hình này và gửi cho shop để nhận quà!</div><div class="err" id="rMsg"></div></div></div>
+<script>
+const $=id=>document.getElementById(id);let cfg,rot=0;const ctx=$('c').getContext('2d');
+function draw(){const n=cfg.slices.length,a=2*Math.PI/n;ctx.clearRect(0,0,600,600);ctx.save();ctx.translate(300,300);ctx.rotate(rot);
+cfg.slices.forEach((s,i)=>{ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,290,i*a,(i+1)*a);ctx.fillStyle=s.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+ctx.save();ctx.rotate(i*a+a/2);ctx.fillStyle='#fff';ctx.font='bold '+(n>10?20:26)+'px Arial';ctx.textAlign='right';ctx.textBaseline='middle';
+let t=s.name.length>18?s.name.slice(0,17)+'…':s.name;ctx.fillText(t,270,0);ctx.restore();});
+ctx.beginPath();ctx.arc(0,0,36,0,7);ctx.fillStyle='#fff';ctx.fill();ctx.restore();}
+const key=()=>'vq_'+cfg.round.id;
+function showResult(r,msg){$('form').classList.add('hide');$('spin').classList.add('hide');$('result').classList.remove('hide');
+$('rPrize').textContent=r.prize;$('rName').textContent=r.name;$('rPhone').textContent=r.phone;$('rVillage').textContent=r.village;$('rRound').textContent=r.roundLabel;
+$('rTime').textContent=new Date(r.time).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});$('rMsg').textContent=msg||'';}
+fetch('/api/config').then(r=>r.json()).then(c=>{cfg=c;$('round').textContent=c.round.label+(c.round.open?'':' — ĐÃ ĐÓNG');draw();
+if(!c.round.open){$('go').disabled=true;$('err1').textContent='Vòng quay hiện đang đóng. Hẹn bạn lần sau!';}
+const saved=localStorage.getItem(key());if(saved)showResult(JSON.parse(saved),'Bạn đã quay trong vòng này rồi.');});
+$('go').onclick=()=>{const p=$('phone').value.replace(/[\s.\-]/g,'').replace(/^\+84/,'0');
+if(!$('name').value.trim()||!$('village').value.trim())return $('err1').textContent='Vui lòng nhập đầy đủ thông tin.';
+if(!/^0(3|5|7|8|9)\d{8}$/.test(p))return $('err1').textContent='Số điện thoại không hợp lệ (VD: 0912345678).';
+$('err1').textContent='';$('form').classList.add('hide');$('spin').classList.remove('hide');};
+$('spinbtn').onclick=async()=>{$('spinbtn').disabled=true;$('err2').textContent='';
+const res=await fetch('/api/spin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('name').value,phone:$('phone').value,village:$('village').value})});
+const d=await res.json();if(!res.ok){if(d.result){localStorage.setItem(key(),JSON.stringify(d.result));return showResult(d.result,d.error);}
+$('err2').textContent=d.error;$('spinbtn').disabled=false;return;}
+const n=cfg.slices.length,a=2*Math.PI/n,i=d.result.prizeIndex;
+// pointer at top (-PI/2); want slice center there
+let target=-Math.PI/2-(i*a+a/2)+(Math.random()-.5)*a*.6;const base=rot%(2*Math.PI);
+let end=rot-base+target+2*Math.PI*8;const start=rot,t0=performance.now(),dur=4500;
+(function step(t){let k=Math.min(1,(t-t0)/dur);rot=start+(end-start)*(1-Math.pow(1-k,3));draw();
+if(k<1)requestAnimationFrame(step);else{localStorage.setItem(key(),JSON.stringify(d.result));setTimeout(()=>showResult(d.result),500);}})(t0);};
+</script></body></html>
