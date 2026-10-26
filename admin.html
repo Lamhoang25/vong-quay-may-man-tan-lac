@@ -9,7 +9,8 @@ input{padding:8px;font-size:15px}button{padding:9px 14px;font-size:15px;margin:4
 <section><h3>Vòng hiện tại: <span id="rl"></span> — <span id="rs"></span></h3>
 <button onclick="act('open')">Mở vòng</button><button onclick="act('close')" class="red">Đóng vòng</button>
 <br><input id="newlabel" placeholder="Tên vòng mới (VD: Tuần 2)"><button onclick="newRound()">Bắt đầu tuần mới</button>
-<p style="color:#666;font-size:13px">"Bắt đầu tuần mới" sẽ đóng vòng cũ và cho phép mọi người quay lại 1 lần. Lịch sử được giữ nguyên.</p></section>
+<p style="color:#666;font-size:13px">"Bắt đầu tuần mới" sẽ đóng vòng cũ và cho phép mọi người quay lại 1 lần.</p>
+<p style="color:#666;font-size:13px">ℹ️ Hệ thống chỉ lưu danh sách <span id="keepn">4</span> tuần gần nhất; tuần cũ hơn sẽ tự động xóa. Nhớ tải CSV trước nếu cần giữ lại.</p></section>
 <section><h3>Thống kê</h3><div>Người chơi vòng này: <span class="big" id="s1"></span> &nbsp; Tổng tất cả: <span class="big" id="s2"></span> &nbsp; Số ĐT khác nhau: <span class="big" id="s3"></span></div>
 <div class="wrap"><table id="pp"></table></div></section>
 <section><h3>Các ô vòng quay</h3><div id="slices"></div><button onclick="addS()">+ Thêm ô</button><button onclick="saveS()">💾 Lưu</button> <span id="sum"></span></section>
@@ -21,7 +22,7 @@ const api=(u,o={})=>fetch(u,{...o,headers:{'Content-Type':'application/json','x-
 function login(){PW=$('pw').value||PW;load().then(()=>sessionStorage.setItem('pw',PW)).catch(e=>$('lerr').textContent=' '+(e.error||'Lỗi'));}
 async function load(){S=await api('/api/admin/state');$('login').style.display='none';$('app').style.display='';
 $('rl').textContent=S.round.label;$('stor').textContent='Lưu trữ: '+(S.storage==='mongodb'?'MongoDB (bền vững)':'file JSON');$('rs').innerHTML=S.round.open?'<b style="color:green">ĐANG MỞ</b>':'<b style="color:red">ĐÃ ĐÓNG</b>';
-$('s1').textContent=S.stats.roundPlayers;$('s2').textContent=S.stats.allPlayers;$('s3').textContent=S.stats.uniquePhonesAll;
+$('keepn').textContent=S.keepRounds||4;$('s1').textContent=S.stats.roundPlayers;$('s2').textContent=S.stats.allPlayers;$('s3').textContent=S.stats.uniquePhonesAll;
 const names=[...new Set([...S.slices.map(s=>s.name),...Object.keys(S.stats.perPrizeAll)])];
 $('pp').innerHTML='<tr><th>Giải</th><th>Vòng này</th><th>Tất cả</th></tr>'+names.map(n=>`<tr><td>${esc(n)}</td><td>${S.stats.perPrizeRound[n]||0}</td><td>${S.stats.perPrizeAll[n]||0}</td></tr>`).join('');
 renderSlices();$('filt').innerHTML='<option value="">Tất cả các vòng</option>'+S.rounds.map(r=>`<option value="${r.id}" ${r.id===S.round.id?'selected':''}>${esc(r.label)}</option>`).join('');renderSpins();}
@@ -32,7 +33,7 @@ $('sum').textContent='Tổng trọng số: '+tot+' (tỉ lệ % = trọng số /
 function addS(){S.slices.push({name:'Ô mới',color:'#'+Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0'),weight:10});renderSlices();}
 function saveS(){api('/api/admin/slices',{method:'PUT',body:JSON.stringify({slices:S.slices})}).then(()=>{alert('Đã lưu');load();}).catch(e=>alert(e.error));}
 function act(a){api('/api/admin/round/'+a,{method:'POST'}).then(load);}
-function newRound(){if(confirm('Bắt đầu vòng mới? Mọi người sẽ được quay lại.'))api('/api/admin/round/new',{method:'POST',body:JSON.stringify({label:$('newlabel').value})}).then(()=>{$('newlabel').value='';load();});}
+function newRound(){if(confirm('Bắt đầu vòng mới? Mọi người sẽ được quay lại.\nHệ thống chỉ giữ '+(S.keepRounds||4)+' tuần gần nhất, tuần cũ nhất sẽ bị xóa.'))api('/api/admin/round/new',{method:'POST',body:JSON.stringify({label:$('newlabel').value})}).then(()=>{$('newlabel').value='';load();});}
 function renderSpins(){const f=+$('filt').value;const L=S.spins.filter(s=>!f||s.roundId===f);
 $('sp').innerHTML='<tr><th>Thời gian</th><th>Vòng</th><th>Tên</th><th>SĐT</th><th>Làng</th><th>Giải</th></tr>'+L.map(s=>`<tr><td>${new Date(s.time).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})}</td><td>${esc(s.roundLabel)}</td><td>${esc(s.name)}</td><td>${s.phone}</td><td>${esc(s.village)}</td><td>${esc(s.prize)}</td></tr>`).join('');}
 function exportCsv(){const f=$('filt').value;location.href='/api/admin/export.csv?pw='+encodeURIComponent(PW)+(f?'&round='+f:'');}
