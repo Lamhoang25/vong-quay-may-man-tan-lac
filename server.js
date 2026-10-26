@@ -3,6 +3,8 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const DATA = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const MONGODB_URI = process.env.MONGODB_URI;
+// Chỉ lưu danh sách của N tuần (vòng) mới nhất, kể cả tuần hiện tại. Tuần cũ hơn tự động xóa.
+const KEEP_ROUNDS = Math.max(1, parseInt(process.env.KEEP_ROUNDS, 10) || 4);
 const DEFAULT_SLICES = [
   { name: 'Giảm 10%', color: '#e74c3c', weight: 30, noWin: false },
   { name: 'Giảm 20%', color: '#f39c12', weight: 20, noWin: false },
@@ -31,6 +33,8 @@ function jsonStore() {
     findSpin: async (roundId, phone) => db.spins.find(s => s.roundId === roundId && s.phone === phone) || null,
     insertSpin: async s => { if (db.spins.some(x => x.roundId === s.roundId && x.phone === s.phone)) throw new DupError(); db.spins.push(s); save(); },
     listSpins: async () => db.spins,
+    deleteSpins: async ids => { const n = db.spins.length; db.spins = db.spins.filter(s => !ids.includes(s.roundId)); save(); return n - db.spins.length; },
+    deleteRounds: async ids => { db.rounds = db.rounds.filter(r => !ids.includes(r.id)); save(); },
   };
 }
 
@@ -55,16 +59,34 @@ async function mongoStore() {
     findSpin: async (roundId, phone) => spins.findOne({ roundId, phone }, P),
     insertSpin: async s => { try { await spins.insertOne({ ...s }); } catch (e) { if (e.code === 11000) throw new DupError(); throw e; } },
     listSpins: async () => spins.find({}, P).sort({ time: 1 }).toArray(),
+    deleteSpins: async ids => (await spins.deleteMany({ roundId: { $in: ids } })).deletedCount,
+    deleteRounds: async ids => { await rounds.deleteMany({ id: { $in: ids } }); },
   };
 }
 
 const normPhone = p => { p = String(p || '').replace(/[\s.\-()]/g, ''); if (p.startsWith('+84')) p = '0' + p.slice(3); else if (p.startsWith('84') && p.length === 11) p = '0' + p.slice(2); return p; };
 const validPhone = p => /^0(3|5|7|8|9)\d{8}$/.test(p);
 const clean = (s, n) => String(s || '').trim().replace(/[<>]/g, '').slice(0, n);
+// Xóa các tuần cũ (cũ nhất trước), chỉ giữ KEEP_ROUNDS tuần mới nhất theo số thứ tự vòng.
+async function pruneOldRounds(st) {
+  const all = [...(await st.getRounds())].sort((a, b) => a.id - b.id);
+  if (all.length <= KEEP_ROUNDS) return 0;
+  const old = all.slice(0, all.length - KEEP_ROUNDS), spins = await st.listSpins();
+  let total = 0;
+  for (const r of old) {
+    const n = spins.filter(s => s.roundId === r.id).length;
+    console.log('[Dọn dữ liệu] Xóa ' + r.label + ' (vòng ' + r.id + '): ' + n + ' lượt quay');
+    total += await st.deleteSpins([r.id]);
+    await st.deleteRounds([r.id]);
+  }
+  console.log('[Dọn dữ liệu] Đã xóa ' + old.length + ' tuần cũ, tổng ' + total + ' lượt quay. Giữ lại ' + KEEP_ROUNDS + ' tuần mới nhất.');
+  return total;
+}
 const wrap = fn => (req, res) => fn(req, res).catch(e => { console.error(e); res.status(500).json({ error: 'Lỗi máy chủ, vui lòng thử lại.' }); });
 
 async function main() {
   const st = MONGODB_URI ? await mongoStore() : jsonStore();
+  await pruneOldRounds(st);
   const app = express(); app.use(express.json());
   const PUB = fs.existsSync(path.join(__dirname, 'public', 'index.html')) ? path.join(__dirname, 'public') : __dirname;
   app.get('/', (req, res) => res.sendFile(path.join(PUB, 'index.html')));
@@ -90,7 +112,7 @@ async function main() {
     const r = await st.current(), all = await st.listSpins(), rs = all.filter(s => s.roundId === r.id);
     const count = arr => { const m = {}; arr.forEach(s => m[s.prize] = (m[s.prize] || 0) + 1); return m; };
     const slices = (await st.getSlices()).map(s => ({ ...s, noWin: isNoWin(s) }));
-    res.json({ storage: st.kind, slices, rounds: await st.getRounds(), round: r, stats: { roundPlayers: rs.length, allPlayers: all.length, uniquePhonesAll: new Set(all.map(s => s.phone)).size, perPrizeRound: count(rs), perPrizeAll: count(all) }, spins: [...all].reverse() });
+    res.json({ storage: st.kind, keepRounds: KEEP_ROUNDS, slices, rounds: await st.getRounds(), round: r, stats: { roundPlayers: rs.length, allPlayers: all.length, uniquePhonesAll: new Set(all.map(s => s.phone)).size, perPrizeRound: count(rs), perPrizeAll: count(all) }, spins: [...all].reverse() });
   }));
   app.put('/api/admin/slices', auth, wrap(async (req, res) => {
     const sl = req.body.slices; if (!Array.isArray(sl) || sl.length < 2 || sl.length > 24) return res.status(400).json({ error: 'Cần 2–24 ô' });
@@ -102,7 +124,7 @@ async function main() {
   app.post('/api/admin/round/close', auth, wrap(async (req, res) => { await st.updateRound((await st.current()).id, { open: false, closedAt: new Date().toISOString() }); res.json({ ok: true }); }));
   app.post('/api/admin/round/new', auth, wrap(async (req, res) => {
     const r = await st.current(); await st.updateRound(r.id, { open: false, closedAt: r.closedAt || new Date().toISOString() });
-    await st.addRound(newRound(r.id + 1, clean(req.body.label, 40))); res.json({ ok: true });
+    await st.addRound(newRound(r.id + 1, clean(req.body.label, 40))); await pruneOldRounds(st); res.json({ ok: true });
   }));
   app.get('/api/admin/export.csv', auth, wrap(async (req, res) => {
     const rid = req.query.round ? +req.query.round : null;
