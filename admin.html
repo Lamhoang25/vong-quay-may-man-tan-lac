@@ -2,15 +2,27 @@
 <style>body{font-family:system-ui,Arial;margin:0;padding:12px;background:#f4f4f4;max-width:900px;margin:auto}section{background:#fff;padding:14px;border-radius:12px;margin:12px 0}
 input{padding:8px;font-size:15px}button{padding:9px 14px;font-size:15px;margin:4px 2px;border:0;border-radius:8px;background:#1d3557;color:#fff}
 .red{background:#e63946}table{border-collapse:collapse;width:100%;font-size:14px}td,th{border-bottom:1px solid #eee;padding:6px;text-align:left}.row input[type=text]{width:45%}.row input[type=number]{width:70px}
+select{padding:8px;font-size:15px}.note{color:#666;font-size:13px}.warn{background:#fff3cd;padding:8px;border-radius:8px}.okb{background:#e7f6ea;padding:8px;border-radius:8px}
 .big{font-size:22px;font-weight:700}.wrap{overflow-x:auto}</style></head><body>
 <h2>🎡 Quản trị Vòng Quay May Mắn - Tân Lạc</h2> <small id="stor" style="color:#666"></small>
 <section id="login"><input type="password" id="pw" placeholder="Mật khẩu"><button onclick="login()">Đăng nhập</button><span id="lerr" style="color:red"></span></section>
 <div id="app" style="display:none">
 <section><h3>Vòng hiện tại: <span id="rl"></span> — <span id="rs"></span></h3>
 <button onclick="act('open')">Mở vòng</button><button onclick="act('close')" class="red">Đóng vòng</button>
-<br><input id="newlabel" placeholder="Tên vòng mới (VD: Tuần 2)"><button onclick="newRound()">Bắt đầu tuần mới</button>
-<p style="color:#666;font-size:13px">"Bắt đầu tuần mới" sẽ đóng vòng cũ và cho phép mọi người quay lại 1 lần.</p>
+<div id="nextclose" class="note" style="font-size:14px"></div>
+<br><input id="newlabel" placeholder="Tên vòng mới (để trống = tự đặt theo ngày)"><button onclick="newRound()">Bắt đầu tuần mới</button>
+<p style="color:#666;font-size:13px">"Bắt đầu tuần mới" sẽ đóng vòng cũ ngay, gửi email danh sách trúng thưởng, và cho phép mọi người quay lại 1 lần. "Đóng vòng" chỉ tạm dừng (có thể "Mở vòng" lại), không gửi email.</p>
 <p style="color:#666;font-size:13px">ℹ️ Hệ thống chỉ lưu danh sách <span id="keepn">4</span> tuần gần nhất; tuần cũ hơn sẽ tự động xóa. Nhớ tải CSV trước nếu cần giữ lại.</p></section>
+<section><h3>⏰ Lịch tự động đóng / mở vòng</h3>
+<label><input type="checkbox" id="auto"> Bật tự động đóng vòng cũ và mở vòng mới</label><br>
+Thời điểm đóng vòng cũ và mở vòng mới: <select id="cday"></select> lúc <select id="chh"></select> giờ <select id="cmm"></select> phút <span id="chint" class="note"></span><br>
+Mỗi vòng kéo dài: <select id="weeks"><option value="1">1 tuần</option><option value="2">2 tuần</option><option value="3">3 tuần</option><option value="4">4 tuần</option></select>
+<p class="note">Mặc định: 00:00 Thứ Hai (tức 12 giờ đêm Chủ nhật), giờ Việt Nam. Tên vòng mới tự đặt theo ngày, VD "Ngày 9 đến ngày 15 tháng 11".<br>Lưu ý: máy chủ miễn phí có thể đang "ngủ" đúng lúc đó, khi đó vòng sẽ được đóng/mở ngay khi có người đầu tiên vào trang (vòng mới vẫn tính đúng ngày).</p>
+<h3>📧 Email nhận danh sách trúng thưởng</h3>
+<input id="emailto" style="width:70%" placeholder="vtnntanlac@gmail.com"> <span class="note">(nhiều email thì cách nhau dấu phẩy)</span>
+<p class="note">Khi một vòng đóng (tự động hoặc bấm "Bắt đầu tuần mới"), hệ thống tự gửi danh sách trúng thưởng của vòng đó về email này (1 lần).</p>
+<div id="emailinfo"></div>
+<button onclick="saveSet()">💾 Lưu cài đặt</button> <button onclick="resend()">📧 Gửi lại email vòng vừa đóng</button></section>
 <section><h3>Thống kê</h3><div>Người chơi vòng này: <span class="big" id="s1"></span> &nbsp; Tổng tất cả: <span class="big" id="s2"></span> &nbsp; Số ĐT khác nhau: <span class="big" id="s3"></span></div>
 <div class="wrap"><table id="pp"></table></div></section>
 <section><h3>Các ô vòng quay</h3><div id="slices"></div><button onclick="addS()">+ Thêm ô</button><button onclick="saveS()">💾 Lưu</button> <span id="sum"></span></section>
@@ -25,8 +37,23 @@ $('rl').textContent=S.round.label;$('stor').textContent='Lưu trữ: '+(S.storag
 $('keepn').textContent=S.keepRounds||4;$('s1').textContent=S.stats.roundPlayers;$('s2').textContent=S.stats.allPlayers;$('s3').textContent=S.stats.uniquePhonesAll;
 const names=[...new Set([...S.slices.map(s=>s.name),...Object.keys(S.stats.perPrizeAll)])];
 $('pp').innerHTML='<tr><th>Giải</th><th>Vòng này</th><th>Tất cả</th></tr>'+names.map(n=>`<tr><td>${esc(n)}</td><td>${S.stats.perPrizeRound[n]||0}</td><td>${S.stats.perPrizeAll[n]||0}</td></tr>`).join('');
-renderSlices();$('filt').innerHTML='<option value="">Tất cả các vòng</option>'+S.rounds.map(r=>`<option value="${r.id}" ${r.id===S.round.id?'selected':''}>${esc(r.label)}</option>`).join('');renderSpins();}
+renderSet();renderSlices();$('filt').innerHTML='<option value="">Tất cả các vòng</option>'+S.rounds.map(r=>`<option value="${r.id}" ${r.id===S.round.id?'selected':''}>${esc(r.label)}</option>`).join('');renderSpins();}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const DOW=['Chủ nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
+const EST={sent:'✅ Đã gửi',failed:'❌ Gửi lỗi',skipped:'⚠️ Chưa gửi (chưa cài email)',pending:'⏳ Đang chờ gửi',sending:'⏳ Đang gửi'};
+const ctime=()=>$('chh').value+':'+$('cmm').value;const p2=n=>String(n).padStart(2,'0');
+function hint(){const d=+$('cday').value,t=ctime();$('chint').textContent=t==='00:00'?'(tức 12 giờ đêm '+DOW[(d+6)%7]+')':'';}
+function renderSet(){const c=S.settings;$('cday').innerHTML=DOW.map((n,i)=>`<option value="${i}" ${i===c.closeDay?'selected':''}>${n}</option>`).join('');
+const [H,M]=c.closeTime.split(':');$('chh').innerHTML=[...Array(24).keys()].map(h=>`<option ${p2(h)===H?'selected':''}>${p2(h)}</option>`).join('');
+$('cmm').innerHTML=[...new Set([...Array(12).keys()].map(i=>p2(i*5)).concat(M))].sort().map(m=>`<option ${m===M?'selected':''}>${m}</option>`).join('');
+$('cday').onchange=hint;$('chh').onchange=hint;$('cmm').onchange=hint;$('auto').checked=c.auto;$('weeks').value=c.weeks;$('emailto').value=c.emailTo;hint();
+$('nextclose').innerHTML=c.auto&&S.nextCloseText?'⏰ Vòng này sẽ tự đóng và mở vòng mới lúc <b>'+S.nextCloseText+'</b> (giờ Việt Nam)':'Tự động đóng/mở vòng đang TẮT.';
+const prev=S.rounds.filter(r=>r.id<S.round.id).pop();
+let h=S.email.configured?'<div class="okb">✅ Đã cài gửi email ('+(S.email.provider==='brevo'?'Brevo':'Google Apps Script')+').</div>':'<div class="warn">⚠️ Chưa cài gửi email: vòng quay vẫn chạy bình thường nhưng chưa gửi được email. Cần thêm biến môi trường trên Render (xem hướng dẫn).</div>';
+if(prev)h+=`<p>Vòng vừa đóng: <b>${esc(prev.label)}</b>: ${EST[prev.emailStatus]||'Không có email (vòng cũ)'}${prev.emailSentAt?' lúc '+new Date(prev.emailSentAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})+' tới '+esc(prev.emailTo||''):''}${prev.emailStatus==='failed'&&prev.emailError?'<br><small style="color:#c00">'+esc(prev.emailError)+'</small>':''}</p>`;
+$('emailinfo').innerHTML=h;}
+function saveSet(){api('/api/admin/settings',{method:'PUT',body:JSON.stringify({auto:$('auto').checked,closeDay:+$('cday').value,closeTime:ctime(),weeks:+$('weeks').value,emailTo:$('emailto').value})}).then(()=>{alert('Đã lưu cài đặt');load();}).catch(e=>alert(e.error||'Lỗi'));}
+function resend(){if(confirm('Gửi lại email danh sách trúng thưởng của vòng vừa đóng?'))api('/api/admin/email/resend',{method:'POST',body:'{}'}).then(d=>{alert('Đã gửi email '+d.label+' tới '+d.to);load();}).catch(e=>{alert(e.error||'Lỗi');load();});}
 function renderSlices(){const tot=S.slices.reduce((a,s)=>a+(+s.weight||0),0);
 $('slices').innerHTML=S.slices.map((s,i)=>`<div class="row"><input type="text" value="${esc(s.name)}" onchange="S.slices[${i}].name=this.value"><input type="color" value="${s.color}" onchange="S.slices[${i}].color=this.value"><input type="number" min="0" value="${s.weight}" onchange="S.slices[${i}].weight=+this.value;renderSlices()"> ${tot?(s.weight/tot*100).toFixed(1):0}% <label><input type="checkbox" ${s.noWin?'checked':''} onchange="S.slices[${i}].noWin=this.checked"> Không trúng</label> <button class="red" onclick="S.slices.splice(${i},1);renderSlices()">✕</button></div>`).join('');
 $('sum').textContent='Tổng trọng số: '+tot+' (tỉ lệ % = trọng số / tổng)';}
